@@ -1,32 +1,121 @@
 "use client"
+
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { formatRupiah } from "@/lib/utils"
 import { plans } from "@/data/plans"
 import { Loader2 } from "lucide-react"
 
-interface ConfirmationDialogProps { open: boolean; onOpenChange: (open: boolean) => void; planId: string; onConfirm: () => void; isLoading: boolean }
+interface ConfirmationDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  planId: string
+  onConfirm: () => void
+  isLoading: boolean
+}
 
-export function ConfirmationDialog({ open, onOpenChange, planId, onConfirm, isLoading }: ConfirmationDialogProps) {
-  if (!planId) return null
+export function ConfirmationDialog({
+  open,
+  onOpenChange,
+  planId,
+  onConfirm,
+  isLoading,
+}: ConfirmationDialogProps) {
+  // Jangan lanjut kalau belum ada plan yang dipilih
+  if (!planId) {
+    return null
+  }
+
+  // Aman dari undefined/null item di array
   const plan = plans?.find((p) => p?.id === planId)
-  if (!plan) return null
+
+  // Kalau plan tidak ditemukan, jangan render dialog
+  if (!plan) {
+    return null
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border-white/10 bg-[#0b1020] text-white shadow-2xl">
+      <DialogContent className="sm:max-w-md bg-dark-400 border-dark-300 text-white">
         <DialogHeader>
-          <DialogTitle className="text-xl">Konfirmasi Pembelian</DialogTitle>
-          <DialogDescription className="text-slate-400">Pastikan paket yang kamu pilih sudah benar.</DialogDescription>
+          <DialogTitle className="text-xl text-red-400">
+            Konfirmasi Pembelian
+          </DialogTitle>
+
+          <DialogDescription className="text-gray-400">
+            Anda akan membeli paket{" "}
+            <span className="font-semibold text-white">
+              {plan.name}
+            </span>
+          </DialogDescription>
         </DialogHeader>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <div className="text-sm font-bold text-white">{plan.name}</div>
-          <div className="mt-1 text-2xl font-black text-cyan-300">{formatRupiah(plan.price)}</div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs"><span className="text-slate-500">RAM</span><span>{plan.memory === 0 ? "Unlimited" : `${plan.memory} MB`}</span><span className="text-slate-500">Disk</span><span>{plan.disk === 0 ? "Unlimited" : `${plan.disk} MB`}</span><span className="text-slate-500">CPU</span><span>{plan.cpu === 0 ? "Unlimited" : `${plan.cpu}%`}</span></div>
+
+        <div className="space-y-4">
+          <div className="bg-dark-500 p-4 rounded-lg border border-dark-300">
+            <h3 className="font-medium text-white mb-2">
+              Detail Paket
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="text-gray-400">RAM:</div>
+              <div className="font-medium text-white">
+                {plan.memory} MB
+              </div>
+
+              <div className="text-gray-400">Disk:</div>
+              <div className="font-medium text-white">
+                {plan.disk} MB
+              </div>
+
+              <div className="text-gray-400">CPU:</div>
+              <div className="font-medium text-white">
+                {plan.cpu}%
+              </div>
+
+              <div className="text-gray-400">Harga:</div>
+              <div className="font-medium text-red-400">
+                {formatRupiah(plan.price)}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-400">
+            Dengan mengklik tombol "Lanjutkan Pembayaran", Anda akan
+            diarahkan ke halaman pembayaran.
+          </p>
         </div>
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading} className="border-white/10 bg-white/5 text-white hover:bg-white/10">Batal</Button>
-          <Button onClick={onConfirm} disabled={isLoading} className="bg-gradient-to-r from-cyan-400 to-blue-500 font-bold text-slate-950 hover:brightness-110">{isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Memproses...</> : "Lanjutkan Pembayaran"}</Button>
+
+        <DialogFooter className="flex flex-col sm:flex-row sm:justify-between gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+            className="w-full sm:w-auto bg-dark-500 border-dark-300 hover:bg-dark-600 text-white"
+          >
+            Batal
+          </Button>
+
+          <Button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Memproses...
+              </>
+            ) : (
+              "Lanjutkan Pembayaran"
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
