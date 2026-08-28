@@ -32,11 +32,13 @@ export async function checkUserExists(
       }
     )
 
-    const normalizedUsername =
-      username.trim().toLowerCase()
+    const normalizedUsername = username
+      .trim()
+      .toLowerCase()
 
-    const normalizedEmail =
-      email.trim().toLowerCase()
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase()
 
     const usernameExists = users.some(
       (user) =>
