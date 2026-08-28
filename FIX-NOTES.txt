@@ -1,0 +1,14 @@
+PERBAIKAN KONFIGURASI
+
+1. Domain Pterodactyl sekarang dibaca dari PANEL_DOMAIN di .env.
+2. Fallback domain panel: https://panelnyariostoree.pteroq.biz.id
+3. PANEL_APIKEY dibersihkan dari spasi/newline sebelum dipakai.
+4. Jika domain/key Pterodactyl kosong atau request gagal, UI tetap menampilkan:
+   Failed to retrieve user list from Pterodactyl panel
+5. Jika Sakurupiah belum lengkap, UI menampilkan:
+   Konfigurasi Sakurupiah belum lengkap
+6. MongoDB diperbaiki menjadi MONGODB_URL=...
+7. APP_URL ditambahkan untuk callback/return QRIS.
+8. Error status Pterodactyl (401/403/404/5xx) dicatat di server log tanpa mencetak API key.
+
+CATATAN: Application API key Pterodactyl harus punya izin Read untuk Users dan izin lain yang dibutuhkan untuk create user/server.
