@@ -55,19 +55,38 @@ export class Pterodactyl {
   private location: string
 
   constructor() {
-    this.domain = (pterodactylConfig.domain || "").trim().replace(/\/$/, "")
+    console.log("=== PTERODACTYL NEW CODE LOADED ===")
+
+    this.domain = (pterodactylConfig.domain || "")
+      .trim()
+      .replace(/\/$/, "")
+
     this.apiKey = (pterodactylConfig.apiKey || "").trim()
 
-    // Tetap gunakan pesan ini jika API panel belum di-setting.
-    // Dengan begitu alur lama di UI tidak berubah.
-    if (!this.domain || !this.apiKey) {
-      throw new Error("Failed to retrieve user list from Pterodactyl panel")
-    }
     this.nests = pterodactylConfig.nests
     this.nestsGame = pterodactylConfig.nestsGame
     this.egg = pterodactylConfig.egg
     this.eggSamp = pterodactylConfig.eggSamp
     this.location = pterodactylConfig.location
+
+    console.log("PTERODACTYL CONFIG:", {
+      domain: this.domain,
+      apiKeyExists: Boolean(this.apiKey),
+      nests: this.nests,
+      egg: this.egg,
+      location: this.location,
+    })
+
+    if (!this.domain || !this.apiKey) {
+      console.error("PTERODACTYL CONFIG MISSING:", {
+        domainExists: Boolean(this.domain),
+        apiKeyExists: Boolean(this.apiKey),
+      })
+
+      throw new Error(
+        "Failed to retrieve user list from Pterodactyl panel"
+      )
+    }
   }
 
   async request<T>(
@@ -75,6 +94,8 @@ export class Pterodactyl {
     method = "GET",
     body: any = null
   ): Promise<T> {
+    const url = `${this.domain}/api/application${endpoint}`
+
     const options: RequestInit = {
       method,
       headers: {
@@ -82,43 +103,74 @@ export class Pterodactyl {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
+      cache: "no-store",
     }
 
     if (body !== null) {
       options.body = JSON.stringify(body)
     }
 
-    const response = await fetch(
-      `${this.domain}/api/application${endpoint}`,
-      options
-    )
+    let response: Response
 
-    if (!response.ok) {
-      console.error("Pterodactyl API request failed", {
-        endpoint: `${this.domain}/api/application${endpoint}`,
-        status: response.status,
-        statusText: response.statusText,
+    try {
+      console.log("PTERODACTYL REQUEST:", {
+        url,
+        method,
+        domain: this.domain,
+        apiKeyExists: Boolean(this.apiKey),
       })
 
-      let errorMessage = `API request failed with status ${response.status}: ${response.statusText}`
+      response = await fetch(url, options)
+    } catch (error) {
+      console.error("PTERODACTYL FETCH FAILED:", {
+        url,
+        domain: this.domain,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                cause: error.cause,
+                stack: error.stack,
+              }
+            : error,
+      })
+
+      throw error
+    }
+
+    console.log("PTERODACTYL RESPONSE:", {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+    })
+
+    if (!response.ok) {
+      const raw = await response.text()
+
+      console.error("PTERODACTYL API ERROR:", {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        response: raw,
+      })
+
+      let errorMessage =
+        `API request failed with status ${response.status}: ${response.statusText}`
 
       try {
-        const errorData = await response.json()
+        const errorData = JSON.parse(raw)
 
         errorMessage =
           errorData?.errors?.[0]?.detail ||
           errorMessage
       } catch {
-        // response bukan JSON
+        // Response bukan JSON.
       }
 
       throw new Error(errorMessage)
     }
 
-    /*
-     * DELETE Pterodactyl biasanya mengembalikan
-     * HTTP 204 No Content.
-     */
     if (response.status === 204) {
       return {} as T
     }
@@ -129,20 +181,21 @@ export class Pterodactyl {
       return {} as T
     }
 
-    return JSON.parse(text) as T
+    try {
+      return JSON.parse(text) as T
+    } catch (error) {
+      console.error("PTERODACTYL JSON PARSE ERROR:", {
+        url,
+        responseText: text,
+        error,
+      })
+
+      throw new Error(
+        "Invalid JSON response from Pterodactyl panel"
+      )
+    }
   }
 
-  /*
-   * ==========================================
-   * CREATE USER
-   * ==========================================
-   *
-   * rootAdmin = false
-   * -> user/pembeli Panel Bot biasa
-   *
-   * rootAdmin = true
-   * -> Admin Pterodactyl
-   */
   async createUser(
     username: string,
     email: string,
@@ -159,11 +212,6 @@ export class Pterodactyl {
     })
   }
 
-  /*
-   * ==========================================
-   * CREATE SERVER PANEL BOT
-   * ==========================================
-   */
   async addServer(
     userId: number,
     serverName: string,
@@ -171,9 +219,6 @@ export class Pterodactyl {
     disk: number,
     cpu: number
   ): Promise<ServerResponse> {
-    /*
-     * Ambil data egg
-     */
     const eggData = await this.request<EggResponse>(
       `/nests/${this.nests}/eggs/${this.egg}`
     )
@@ -182,9 +227,6 @@ export class Pterodactyl {
       throw new Error("Egg startup command is undefined.")
     }
 
-    /*
-     * Cari Docker image NodeJS 20
-     */
     const dockerImage =
       eggData.attributes.docker_images[
         "ghcr.io/parkervcp/yolks:nodejs_20"
@@ -196,9 +238,6 @@ export class Pterodactyl {
       )
     }
 
-    /*
-     * Buat server
-     */
     return this.request<ServerResponse>(
       "/servers",
       "POST",
@@ -254,11 +293,6 @@ export class Pterodactyl {
     )
   }
 
-  /*
-   * ==========================================
-   * LIST SERVER
-   * ==========================================
-   */
   async listServers(): Promise<
     Array<{
       id: number
@@ -266,29 +300,33 @@ export class Pterodactyl {
       user: number
     }>
   > {
-    const serversResponse =
-      await this.request<ServerListResponse>(
-        "/servers"
+    try {
+      const serversResponse =
+        await this.request<ServerListResponse>(
+          "/servers"
+        )
+
+      if (!serversResponse.data) {
+        return []
+      }
+
+      return serversResponse.data.map(
+        (server) => ({
+          id: server.attributes.id,
+          name: server.attributes.name,
+          user: server.attributes.user,
+        })
+      )
+    } catch (error) {
+      console.error(
+        "PTERODACTYL LIST SERVERS REAL ERROR:",
+        error
       )
 
-    if (!serversResponse.data) {
-      return []
+      throw error
     }
-
-    return serversResponse.data.map(
-      (server) => ({
-        id: server.attributes.id,
-        name: server.attributes.name,
-        user: server.attributes.user,
-      })
-    )
   }
 
-  /*
-   * ==========================================
-   * LIST USER
-   * ==========================================
-   */
   async listUsers(): Promise<
     Array<{
       id: number
@@ -298,29 +336,39 @@ export class Pterodactyl {
     }>
   > {
     try {
+      console.log("=== PTERODACTYL LIST USERS CALLED ===")
+
       const usersResponse =
         await this.request<UserListResponse>(
           "/users"
         )
 
       if (!usersResponse.data) {
+        console.log(
+          "PTERODACTYL LIST USERS: response tidak punya data"
+        )
+
         return []
       }
+
+      console.log(
+        "PTERODACTYL LIST USERS SUCCESS:",
+        {
+          totalUsers: usersResponse.data.length,
+        }
+      )
 
       return usersResponse.data.map(
         (user) => ({
           id: user.attributes.id,
-          username:
-            user.attributes.username,
-          email:
-            user.attributes.email,
-          root_admin:
-            user.attributes.root_admin,
+          username: user.attributes.username,
+          email: user.attributes.email,
+          root_admin: user.attributes.root_admin,
         })
       )
     } catch (error) {
       console.error(
-        "Error listing users:",
+        "PTERODACTYL LIST USERS REAL ERROR:",
         error
       )
 
@@ -330,11 +378,6 @@ export class Pterodactyl {
     }
   }
 
-  /*
-   * ==========================================
-   * USER INFO
-   * ==========================================
-   */
   async userInfo(
     userId: number
   ): Promise<
@@ -393,11 +436,6 @@ export class Pterodactyl {
     }
   }
 
-  /*
-   * ==========================================
-   * DELETE SERVER
-   * ==========================================
-   */
   async deleteServer(
     serverId: number
   ): Promise<any> {
@@ -407,11 +445,6 @@ export class Pterodactyl {
     )
   }
 
-  /*
-   * ==========================================
-   * DELETE USER
-   * ==========================================
-   */
   async deleteUser(
     userId: number
   ): Promise<any> {
