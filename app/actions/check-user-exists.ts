@@ -1,4 +1,4 @@
-""use server"
+"use server"
 
 import { Pterodactyl } from "@/lib/pterodactyl"
 
@@ -7,12 +7,9 @@ export async function checkUserExists(
   email: string
 ) {
   console.error("=== CHECK USER EXISTS DEBUG V3 ===", {
-    panelDomain:
-      process.env.PANEL_DOMAIN || "(MISSING)",
-    panelApiKeyExists:
-      Boolean(process.env.PANEL_APIKEY),
-    nodeEnv:
-      process.env.NODE_ENV,
+    panelDomain: process.env.PANEL_DOMAIN || "(MISSING)",
+    panelApiKeyExists: Boolean(process.env.PANEL_APIKEY),
+    nodeEnv: process.env.NODE_ENV,
   })
 
   try {
@@ -20,15 +17,13 @@ export async function checkUserExists(
       "CHECK USER EXISTS: BEFORE NEW PTERODACTYL"
     )
 
-    const pterodactyl =
-      new Pterodactyl()
+    const pterodactyl = new Pterodactyl()
 
     console.error(
       "CHECK USER EXISTS: AFTER NEW PTERODACTYL"
     )
 
-    const users =
-      await pterodactyl.listUsers()
+    const users = await pterodactyl.listUsers()
 
     console.error(
       "CHECK USER EXISTS: LIST USERS SUCCESS",
@@ -38,32 +33,22 @@ export async function checkUserExists(
     )
 
     const normalizedUsername =
-      username
-        .trim()
-        .toLowerCase()
+      username.trim().toLowerCase()
 
     const normalizedEmail =
-      email
-        .trim()
-        .toLowerCase()
+      email.trim().toLowerCase()
 
-    const usernameExists =
-      users.some(
-        (user) =>
-          user.username
-            .trim()
-            .toLowerCase() ===
-          normalizedUsername
-      )
+    const usernameExists = users.some(
+      (user) =>
+        user.username.trim().toLowerCase() ===
+        normalizedUsername
+    )
 
-    const emailExists =
-      users.some(
-        (user) =>
-          user.email
-            .trim()
-            .toLowerCase() ===
-          normalizedEmail
-      )
+    const emailExists = users.some(
+      (user) =>
+        user.email.trim().toLowerCase() ===
+        normalizedEmail
+    )
 
     return {
       success: true,
