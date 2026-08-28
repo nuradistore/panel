@@ -1,146 +1,507 @@
-import { revalidatePath } from "next/cache"
-import clientPromise from "@/lib/mongodb"
-import { appConfig } from "@/data/config"
-import type { ObjectId } from "mongodb"
+import { pterodactylConfig } from "@/data/config"
 
-export type PaymentStatus =
-  | "pending"
-  | "paid"
-  | "processing"
-  | "completed"
-  | "failed"
-
-export interface PanelDetails {
-  username: string
-  password: string
-  serverId: number | null
-  userId?: number
-  type?: "panel-bot" | "admin-panel"
-}
-
-export interface PaymentData {
-  _id?: ObjectId
-  transactionId: string
-  vpediaId: string
-  planId: string
+interface UserAttributes {
+  id: number
   username: string
   email: string
-  amount: number
-  fee: number
-  total: number
-  qrImageUrl: string
-  expirationTime: string
-  status: PaymentStatus
-  createdAt: string
-  panelDetails?: PanelDetails
+  first_name: string
+  last_name: string
+  root_admin?: boolean
 }
 
-function collection(db: any) {
-  return db.collection<PaymentData>("payments")
+interface ServerAttributes {
+  id: number
+  name: string
+  user: number
 }
 
-export async function getPayment(transactionId: string): Promise<PaymentData | null> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    return await collection(db).findOne({ transactionId })
-  } catch (error) {
-    console.error("Error getting payment:", error)
-    return null
+interface EggAttributes {
+  startup: string
+  docker_images: {
+    [key: string]: string
   }
 }
 
-export async function updatePaymentStatus(
-  transactionId: string,
-  status: PaymentStatus,
-  panelDetails?: PanelDetails,
-): Promise<boolean> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    const filter: any = { transactionId }
+interface UserResponse {
+  attributes?: UserAttributes
+  errors?: Array<{ detail: string }>
+}
 
-    // A late failed response must never overwrite processing/completed.
-    if (status === "failed") filter.status = { $in: ["pending", "paid"] }
+interface ServerResponse {
+  attributes?: ServerAttributes
+  errors?: Array<{ detail: string }>
+}
 
-    const updateData: Record<string, unknown> = { status }
-    if (panelDetails) updateData.panelDetails = panelDetails
+interface EggResponse {
+  attributes?: EggAttributes
+  errors?: Array<{ detail: string }>
+}
 
-    const result = await collection(db).updateOne(filter, { $set: updateData })
-    if (result.matchedCount > 0) {
-      revalidatePath(`/invoice/${transactionId}`)
-      return true
+interface ServerListResponse {
+  data?: Array<{ attributes: ServerAttributes }>
+}
+
+interface UserListResponse {
+  data?: Array<{ attributes: UserAttributes }>
+}
+
+export class Pterodactyl {
+  private domain: string
+  private apiKey: string
+  private nests: string
+  private nestsGame: string
+  private egg: string
+  private eggSamp: string
+  private location: string
+
+  constructor() {
+    this.domain = (pterodactylConfig.domain || "")
+      .trim()
+      .replace(/\/$/, "")
+
+    this.apiKey = (pterodactylConfig.apiKey || "").trim()
+
+    this.nests = pterodactylConfig.nests
+    this.nestsGame = pterodactylConfig.nestsGame
+    this.egg = pterodactylConfig.egg
+    this.eggSamp = pterodactylConfig.eggSamp
+    this.location = pterodactylConfig.location
+
+    /*
+     * Kalau domain/API key belum ada,
+     * UI tetap pakai pesan lama.
+     */
+    if (!this.domain || !this.apiKey) {
+      console.error("PTERODACTYL CONFIG MISSING:", {
+        domainExists: Boolean(this.domain),
+        apiKeyExists: Boolean(this.apiKey),
+      })
+
+      throw new Error(
+        "Failed to retrieve user list from Pterodactyl panel"
+      )
     }
-    return false
-  } catch (error) {
-    console.error("Error updating payment status:", error)
-    return false
   }
-}
 
-export async function claimPaymentForProcessing(transactionId: string): Promise<boolean> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    const result = await collection(db).updateOne(
-      { transactionId, status: { $in: ["pending", "paid"] } },
-      { $set: { status: "processing" } },
-    )
-    return result.modifiedCount === 1
-  } catch (error) {
-    console.error("Error claiming payment:", error)
-    return false
-  }
-}
+  /*
+   * ==========================================
+   * GENERIC API REQUEST
+   * ==========================================
+   */
+  async request<T>(
+    endpoint: string,
+    method = "GET",
+    body: any = null
+  ): Promise<T> {
+    const url = `${this.domain}/api/application${endpoint}`
 
-export async function releasePaymentProcessing(transactionId: string): Promise<boolean> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    const result = await collection(db).updateOne(
-      { transactionId, status: "processing" },
-      { $set: { status: "paid" } },
-    )
-    return result.modifiedCount === 1
-  } catch (error) {
-    console.error("Error releasing payment processing:", error)
-    return false
-  }
-}
-
-export async function completePaymentProcessing(
-  transactionId: string,
-  panelDetails: PanelDetails,
-): Promise<boolean> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    const result = await collection(db).updateOne(
-      { transactionId, status: "processing" },
-      { $set: { status: "completed", panelDetails } },
-    )
-    if (result.modifiedCount === 1) {
-      revalidatePath(`/invoice/${transactionId}`)
-      return true
+    const options: RequestInit = {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      cache: "no-store",
     }
-    return false
-  } catch (error) {
-    console.error("Error completing payment:", error)
-    return false
-  }
-}
 
-export async function resolvePaymentTransactionId(identifier: string): Promise<string | null> {
-  try {
-    const client = await clientPromise
-    const db = client.db(appConfig.mongodb.dbName)
-    const payment = await collection(db).findOne(
-      { $or: [{ transactionId: identifier }, { vpediaId: identifier }] },
-      { projection: { transactionId: 1 } },
+    if (body !== null) {
+      options.body = JSON.stringify(body)
+    }
+
+    let response: Response
+
+    /*
+     * Debug koneksi.
+     * API key asli tidak dicetak.
+     */
+    try {
+      console.log("PTERODACTYL REQUEST:", {
+        url,
+        method,
+        domain: this.domain,
+        apiKeyExists: Boolean(this.apiKey),
+        apiKeyPrefix: this.apiKey
+          ? `${this.apiKey.substring(0, 5)}***`
+          : "EMPTY",
+      })
+
+      response = await fetch(url, options)
+    } catch (error) {
+      console.error("PTERODACTYL FETCH FAILED:", {
+        url,
+        domain: this.domain,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                cause: error.cause,
+                stack: error.stack,
+              }
+            : error,
+      })
+
+      throw error
+    }
+
+    console.log("PTERODACTYL RESPONSE:", {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+    })
+
+    /*
+     * Response dari API gagal.
+     */
+    if (!response.ok) {
+      const raw = await response.text()
+
+      console.error("PTERODACTYL API ERROR:", {
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        response: raw,
+      })
+
+      let errorMessage =
+        `API request failed with status ${response.status}: ${response.statusText}`
+
+      try {
+        const errorData = JSON.parse(raw)
+
+        errorMessage =
+          errorData?.errors?.[0]?.detail ||
+          errorMessage
+      } catch {
+        // response bukan JSON
+      }
+
+      throw new Error(errorMessage)
+    }
+
+    /*
+     * DELETE Pterodactyl biasanya
+     * mengembalikan HTTP 204.
+     */
+    if (response.status === 204) {
+      return {} as T
+    }
+
+    const text = await response.text()
+
+    if (!text) {
+      return {} as T
+    }
+
+    try {
+      return JSON.parse(text) as T
+    } catch (error) {
+      console.error("PTERODACTYL JSON PARSE ERROR:", {
+        url,
+        responseText: text,
+        error,
+      })
+
+      throw new Error(
+        "Invalid JSON response from Pterodactyl panel"
+      )
+    }
+  }
+
+  /*
+   * ==========================================
+   * CREATE USER
+   * ==========================================
+   */
+  async createUser(
+    username: string,
+    email: string,
+    password: string,
+    rootAdmin = false
+  ): Promise<UserResponse> {
+    return this.request<UserResponse>("/users", "POST", {
+      username,
+      email,
+      first_name: username,
+      last_name: rootAdmin ? "Admin" : "User",
+      password,
+      root_admin: rootAdmin,
+    })
+  }
+
+  /*
+   * ==========================================
+   * CREATE SERVER PANEL BOT
+   * ==========================================
+   */
+  async addServer(
+    userId: number,
+    serverName: string,
+    memory: number,
+    disk: number,
+    cpu: number
+  ): Promise<ServerResponse> {
+    /*
+     * Ambil data egg.
+     */
+    const eggData = await this.request<EggResponse>(
+      `/nests/${this.nests}/eggs/${this.egg}`
     )
-    return payment?.transactionId || null
-  } catch (error) {
-    console.error("Error resolving payment transaction:", error)
-    return null
+
+    if (!eggData.attributes || !eggData.attributes.startup) {
+      throw new Error("Egg startup command is undefined.")
+    }
+
+    /*
+     * Cari Docker image NodeJS 20.
+     */
+    const dockerImage =
+      eggData.attributes.docker_images[
+        "ghcr.io/parkervcp/yolks:nodejs_20"
+      ]
+
+    if (!dockerImage) {
+      throw new Error(
+        "NodeJS 20 docker image not available in this egg."
+      )
+    }
+
+    /*
+     * Buat server.
+     */
+    return this.request<ServerResponse>(
+      "/servers",
+      "POST",
+      {
+        name: serverName,
+
+        description:
+          "Order Panel? Kunjungi https://www.tokopanelbrockstore.my.id",
+
+        user: userId,
+
+        egg: Number.parseInt(this.egg),
+
+        docker_image: dockerImage,
+
+        startup: eggData.attributes.startup,
+
+        environment: {
+          GIT_ADDRESS: "",
+          BRANCH: "",
+          USERNAME: "",
+          ACCESS_TOKEN: "",
+          CMD_RUN: "npm start",
+          AUTO_UPDATE: "0",
+          NODE_PACKAGES: "",
+          UNNODE_PACKAGES: "",
+          CUSTOM_ENVIRONMENT_VARIABLES: "",
+          USER_UPLOAD: "true",
+        },
+
+        limits: {
+          memory,
+          swap: 0,
+          disk,
+          io: 500,
+          cpu,
+        },
+
+        feature_limits: {
+          databases: 5,
+          backups: 5,
+          allocations: 1,
+        },
+
+        deploy: {
+          locations: [
+            Number.parseInt(this.location),
+          ],
+          dedicated_ip: false,
+          port_range: [],
+        },
+      }
+    )
+  }
+
+  /*
+   * ==========================================
+   * LIST SERVER
+   * ==========================================
+   */
+  async listServers(): Promise<
+    Array<{
+      id: number
+      name: string
+      user: number
+    }>
+  > {
+    try {
+      const serversResponse =
+        await this.request<ServerListResponse>(
+          "/servers"
+        )
+
+      if (!serversResponse.data) {
+        return []
+      }
+
+      return serversResponse.data.map(
+        (server) => ({
+          id: server.attributes.id,
+          name: server.attributes.name,
+          user: server.attributes.user,
+        })
+      )
+    } catch (error) {
+      console.error(
+        "PTERODACTYL LIST SERVERS REAL ERROR:",
+        error
+      )
+
+      throw error
+    }
+  }
+
+  /*
+   * ==========================================
+   * LIST USER
+   * ==========================================
+   */
+  async listUsers(): Promise<
+    Array<{
+      id: number
+      username: string
+      email: string
+      root_admin?: boolean
+    }>
+  > {
+    try {
+      const usersResponse =
+        await this.request<UserListResponse>(
+          "/users"
+        )
+
+      if (!usersResponse.data) {
+        return []
+      }
+
+      return usersResponse.data.map(
+        (user) => ({
+          id: user.attributes.id,
+          username: user.attributes.username,
+          email: user.attributes.email,
+          root_admin: user.attributes.root_admin,
+        })
+      )
+    } catch (error) {
+      /*
+       * Error asli tetap masuk Vercel Logs.
+       */
+      console.error(
+        "PTERODACTYL LIST USERS REAL ERROR:",
+        error
+      )
+
+      /*
+       * Pesan ke user tetap sama
+       * seperti alur website sebelumnya.
+       */
+      throw new Error(
+        "Failed to retrieve user list from Pterodactyl panel"
+      )
+    }
+  }
+
+  /*
+   * ==========================================
+   * USER INFO
+   * ==========================================
+   */
+  async userInfo(
+    userId: number
+  ): Promise<
+    | {
+        id: number
+        username: string
+        email: string
+        root_admin?: boolean
+        total_servers: number
+        servers: Array<{
+          id: number
+          name: string
+          user: number
+        }>
+      }
+    | {
+        error: string
+      }
+  > {
+    const userResponse =
+      await this.request<UserResponse>(
+        `/users/${userId}`
+      )
+
+    if (!userResponse.attributes) {
+      return {
+        error: "User not found",
+      }
+    }
+
+    const servers =
+      await this.listServers()
+
+    const userServers =
+      servers.filter(
+        (server) =>
+          server.user === userId
+      )
+
+    return {
+      id: userResponse.attributes.id,
+
+      username:
+        userResponse.attributes.username,
+
+      email:
+        userResponse.attributes.email,
+
+      root_admin:
+        userResponse.attributes.root_admin,
+
+      total_servers:
+        userServers.length,
+
+      servers: userServers,
+    }
+  }
+
+  /*
+   * ==========================================
+   * DELETE SERVER
+   * ==========================================
+   */
+  async deleteServer(
+    serverId: number
+  ): Promise<any> {
+    return this.request(
+      `/servers/${serverId}`,
+      "DELETE"
+    )
+  }
+
+  /*
+   * ==========================================
+   * DELETE USER
+   * ==========================================
+   */
+  async deleteUser(
+    userId: number
+  ): Promise<any> {
+    return this.request(
+      `/users/${userId}`,
+      "DELETE"
+    )
   }
 }
