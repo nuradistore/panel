@@ -147,7 +147,7 @@ export const plans: Plan[] = [
     memory: 4096,
     disk: 10240,
     cpu: 100,
-    price: 15000,
+    price: 100,
     description: "Akses admin untuk kebutuhan pengelolaan panel dasar.",
     features: ["Akses administrator", "Kelola panel", "Akses fitur admin", "Garansi 30 hari"],
     badge: "Starter",
