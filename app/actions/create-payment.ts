@@ -6,37 +6,65 @@ import { revalidatePath } from "next/cache"
 import clientPromise from "@/lib/mongodb"
 import { appConfig } from "@/data/config"
 import type { PaymentData } from "@/lib/payments"
-import { countAvailableRedfingerStock, getRedfingerProduct } from "@/lib/redfinger"
-import crypto from "crypto"\nimport { cookies } from "next/headers"\nimport { getUserBySession, SESSION_COOKIE } from "@/lib/auth"
+import {
+  countAvailableRedfingerStock,
+  getRedfingerProduct,
+} from "@/lib/redfinger"
+import crypto from "crypto"
+import { cookies } from "next/headers"
+import {
+  getUserBySession,
+  SESSION_COOKIE,
+} from "@/lib/auth"
 
 const SAKURU_API_ID = appConfig.pay.api_id
 const SAKURU_API_KEY = appConfig.pay.api_key
 const SAKURU_API_URL = "https://sakurupiah.id/api/create.php"
-const APP_URL = (process.env.APP_URL || "https://www.tokopanelbrockstore.my.id").replace(/\/$/, "")
+
+const APP_URL = (
+  process.env.APP_URL ||
+  "https://www.tokopanelbrockstore.my.id"
+).replace(/\/$/, "")
 
 export async function createPayment(
   planId: string,
   customerValue: string,
   email: string,
-  category: "panel-bot" | "admin-panel" | "redfinger" = "panel-bot",
+  category:
+    | "panel-bot"
+    | "admin-panel"
+    | "redfinger" = "panel-bot",
 ) {
   try {
     const cleanEmail = email.trim().toLowerCase()
 
-    // Login bersifat opsional. Jika ada session, transaksi ditempel ke akun.
+    // Login bersifat opsional.
+    // Kalau customer sedang login,
+    // transaksi akan ditautkan ke akun.
     const cookieStore = await cookies()
-    const sessionToken = cookieStore.get(SESSION_COOKIE)?.value
-    const accountUser = await getUserBySession(sessionToken)
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    const sessionToken =
+      cookieStore.get(SESSION_COOKIE)?.value
+
+    const accountUser =
+      await getUserBySession(sessionToken)
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        cleanEmail,
+      )
+    ) {
       throw new Error("Email tidak valid")
     }
 
     if (!SAKURU_API_ID || !SAKURU_API_KEY) {
-      throw new Error("Konfigurasi Sakurupiah belum lengkap")
+      throw new Error(
+        "Konfigurasi Sakurupiah belum lengkap",
+      )
     }
 
-    const isRedfinger = category === "redfinger"
+    const isRedfinger =
+      category === "redfinger"
 
     const panelPlan = !isRedfinger
       ? plans.find((p) => p?.id === planId)
@@ -50,29 +78,53 @@ export async function createPayment(
       throw new Error("Plan tidak ditemukan")
     }
 
-    if (isRedfinger && !redfingerProduct) {
-      throw new Error("Produk REDFINGER tidak ditemukan")
+    if (
+      isRedfinger &&
+      !redfingerProduct
+    ) {
+      throw new Error(
+        "Produk REDFINGER tidak ditemukan",
+      )
     }
 
     let cleanUsername = ""
     let cleanPhone = ""
 
     if (isRedfinger) {
-      cleanPhone = customerValue.replace(/[\s+()-]/g, "")
+      cleanPhone = customerValue.replace(
+        /[\s+()-]/g,
+        "",
+      )
 
-      if (!/^(?:08|628)\d{8,13}$/.test(cleanPhone)) {
-        throw new Error("Nomor WhatsApp tidak valid")
+      if (
+        !/^(?:08|628)\d{8,13}$/.test(
+          cleanPhone,
+        )
+      ) {
+        throw new Error(
+          "Nomor WhatsApp tidak valid",
+        )
       }
 
-      const stock = await countAvailableRedfingerStock(planId)
+      const stock =
+        await countAvailableRedfingerStock(
+          planId,
+        )
 
       if (stock <= 0) {
-        throw new Error("Stok REDFINGER sedang habis")
+        throw new Error(
+          "Stok REDFINGER sedang habis",
+        )
       }
     } else {
-      cleanUsername = customerValue.trim()
+      cleanUsername =
+        customerValue.trim()
 
-      if (!/^[a-zA-Z0-9]{3,32}$/.test(cleanUsername)) {
+      if (
+        !/^[a-zA-Z0-9]{3,32}$/.test(
+          cleanUsername,
+        )
+      ) {
         throw new Error(
           "Username minimal 3 karakter dan hanya boleh huruf/angka",
         )
@@ -87,13 +139,22 @@ export async function createPayment(
       ? redfingerProduct!.name
       : panelPlan!.name
 
-    const internalFee = calculateFee(price)
-    const nominal = price + internalFee
-    const transactionId = generateTransactionId()
+    const internalFee =
+      calculateFee(price)
+
+    const nominal =
+      price + internalFee
+
+    const transactionId =
+      generateTransactionId()
+
     const method = "QRIS2"
 
     const signature = crypto
-      .createHmac("sha256", SAKURU_API_KEY)
+      .createHmac(
+        "sha256",
+        SAKURU_API_KEY,
+      )
       .update(
         SAKURU_API_ID +
           method +
@@ -102,10 +163,18 @@ export async function createPayment(
       )
       .digest("hex")
 
-    const bodyData = new URLSearchParams()
+    const bodyData =
+      new URLSearchParams()
 
-    bodyData.append("api_id", SAKURU_API_ID)
-    bodyData.append("method", method)
+    bodyData.append(
+      "api_id",
+      SAKURU_API_ID,
+    )
+
+    bodyData.append(
+      "method",
+      method,
+    )
 
     bodyData.append(
       "name",
@@ -114,10 +183,8 @@ export async function createPayment(
         : cleanUsername,
     )
 
-    // Sakurupiah menerima email toko,
-    // bukan email pembeli.
-    // Jadi kalau Sakurupiah mengirim notifikasi email,
-    // email tersebut masuk ke email toko.
+    // Email Sakurupiah diarahkan
+    // ke email toko.
     bodyData.append(
       "email",
       appConfig.emailSender.auth.user,
@@ -184,17 +251,23 @@ export async function createPayment(
       SAKURU_API_URL,
       {
         method: "POST",
+
         body: bodyData,
+
         headers: {
-          Authorization: `Bearer ${SAKURU_API_KEY}`,
+          Authorization:
+            `Bearer ${SAKURU_API_KEY}`,
+
           "Content-Type":
             "application/x-www-form-urlencoded",
         },
+
         cache: "no-store",
       },
     )
 
-    const raw = await response.text()
+    const raw =
+      await response.text()
 
     let json: any
 
@@ -211,7 +284,9 @@ export async function createPayment(
       )
     }
 
-    if (String(json.status) !== "200") {
+    if (
+      String(json.status) !== "200"
+    ) {
       throw new Error(
         json.message ||
           "Gagal membuat invoice Sakurupiah",
@@ -230,24 +305,32 @@ export async function createPayment(
       )
     }
 
-    const initialGatewayStatus = String(
-      pay.payment_status || "pending",
-    ).toLowerCase()
+    const initialGatewayStatus =
+      String(
+        pay.payment_status ||
+          "pending",
+      ).toLowerCase()
 
-    const initialStatus: PaymentData["status"] =
+    const initialStatus:
+      PaymentData["status"] =
       [
         "gagal",
         "failed",
         "expired",
-      ].includes(initialGatewayStatus)
+      ].includes(
+        initialGatewayStatus,
+      )
         ? "failed"
         : "pending"
 
-    const paymentData: PaymentData = {
+    const paymentData:
+      PaymentData = {
       transactionId,
 
-      // ID transaksi dari Sakurupiah
-      vpediaId: String(pay.trx_id),
+      // ID transaksi Sakurupiah
+      vpediaId: String(
+        pay.trx_id,
+      ),
 
       planId,
 
@@ -267,37 +350,48 @@ export async function createPayment(
         ? cleanPhone
         : undefined,
 
-      // Ini tetap email customer.
-      // Dipakai BROCK STORE untuk mengirim
-      // detail pembelian setelah pembayaran berhasil.
+      // Email customer tetap disimpan.
       email: cleanEmail,
 
       amount: price,
+
       fee: internalFee,
+
       total: nominal,
 
-      qrImageUrl: String(pay.qr),
+      qrImageUrl:
+        String(pay.qr),
 
-      expirationTime: new Date(
-        pay.expired,
-      ).toISOString(),
+      expirationTime:
+        new Date(
+          pay.expired,
+        ).toISOString(),
 
-      status: initialStatus,
+      status:
+        initialStatus,
 
-      createdAt: new Date().toISOString(),
+      createdAt:
+        new Date().toISOString(),
 
-      // Field akun opsional; guest checkout tetap tidak berubah.
-      userId: accountUser?.id,
-      accountEmail: accountUser?.email,
+      // Hanya terisi kalau customer login.
+      userId:
+        accountUser?.id,
+
+      accountEmail:
+        accountUser?.email,
     }
 
-    const client = await clientPromise
+    const client =
+      await clientPromise
+
     const db = client.db(
       appConfig.mongodb.dbName,
     )
 
     await db
-      .collection<PaymentData>("payments")
+      .collection<PaymentData>(
+        "payments",
+      )
       .insertOne(paymentData)
 
     revalidatePath(
@@ -316,6 +410,7 @@ export async function createPayment(
 
     return {
       success: false,
+
       error:
         error instanceof Error
           ? error.message
