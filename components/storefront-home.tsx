@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import PanelForm from "@/components/panel-form"
 import { InfoSection } from "@/components/info-section"
 import { StatsSection } from "@/components/stats-section"
@@ -14,6 +14,11 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react"
+
+type AccountUser = {
+  username: string
+  email: string
+}
 
 const hero = {
   "panel-bot": {
@@ -46,11 +51,77 @@ const hero = {
   }
 >
 
-export function StorefrontHome() {
+const loggedInHero = [
+  {
+    eyebrow: "SELAMAT DATANG",
+    title: "Halo,",
+    accentType: "username",
+    accent: "",
+    text: "Senang melihat kamu kembali di BROCK STORE. Pilih layanan digital yang kamu butuhkan hari ini.",
+  },
+  {
+    eyebrow: "BROCK STORE",
+    title: "Belanja lebih cepat.",
+    accentType: "text",
+    accent: "Semua dalam satu tempat.",
+    text: "Panel Bot, Admin Panel, dan REDFINGER tersedia dan dapat dibeli langsung dari akun kamu.",
+  },
+  {
+    eyebrow: "AKUN KAMU AKTIF",
+    title: "Transaksi lebih",
+    accentType: "text",
+    accent: "praktis.",
+    text: "Setiap transaksi yang kamu buat saat login otomatis terhubung dengan akun BROCK STORE kamu.",
+  },
+  {
+    eyebrow: "SIAP BELANJA?",
+    title: "Pilih produk.",
+    accentType: "text",
+    accent: "Bayar. Beres.",
+    text: "Pilih produk yang kamu inginkan lalu lanjutkan pembayaran QRIS dengan mudah.",
+  },
+]
+
+export function StorefrontHome({
+  user,
+}: {
+  user?: AccountUser | null
+}) {
   const [activeCategory, setActiveCategory] =
     useState<StoreCategory>("panel-bot")
 
-  const copy = hero[activeCategory]
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [heroVisible, setHeroVisible] = useState(true)
+
+  const guestCopy = hero[activeCategory]
+  const loginCopy = loggedInHero[heroIndex]
+
+  useEffect(() => {
+    if (!user) return
+
+    let timeout: ReturnType<typeof setTimeout> | undefined
+
+    const interval = setInterval(() => {
+      setHeroVisible(false)
+
+      timeout = setTimeout(() => {
+        setHeroIndex(
+          (current) =>
+            (current + 1) % loggedInHero.length,
+        )
+
+        setHeroVisible(true)
+      }, 350)
+    }, 4000)
+
+    return () => {
+      clearInterval(interval)
+
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+    }
+  }, [user])
 
   return (
     <main>
@@ -64,26 +135,55 @@ export function StorefrontHome() {
         <div className="relative mx-auto grid max-w-7xl gap-12 px-4 md:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <div className="lg:sticky lg:top-28">
 
-            {/* HERO BADGE */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
-              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,.9)]" />
+            {/* HERO KHUSUS USER LOGIN */}
+            {user ? (
+              <div
+                className={`transition-all duration-500 ${
+                  heroVisible
+                    ? "translate-y-0 opacity-100"
+                    : "translate-y-3 opacity-0"
+                }`}
+              >
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                  <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,.9)]" />
+                  {loginCopy.eyebrow}
+                </div>
 
-              {copy.eyebrow}
-            </div>
+                <h1 className="mt-6 max-w-xl text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
+                  {loginCopy.title}
 
-            {/* HERO TITLE */}
-            <h1 className="mt-6 max-w-xl text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
-              {copy.title}
+                  <span className="block bg-gradient-to-r from-cyan-300 via-sky-300 to-violet-300 bg-clip-text text-transparent">
+                    {loginCopy.accentType === "username"
+                      ? `${user.username} 👋`
+                      : loginCopy.accent}
+                  </span>
+                </h1>
 
-              <span className="block bg-gradient-to-r from-cyan-300 via-sky-300 to-violet-300 bg-clip-text text-transparent">
-                {copy.accent}
-              </span>
-            </h1>
+                <p className="mt-5 max-w-lg text-sm leading-7 text-slate-400 md:text-base">
+                  {loginCopy.text}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* HERO TAMU - TETAP SAMA SEPERTI SEBELUMNYA */}
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                  <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,.9)]" />
+                  {guestCopy.eyebrow}
+                </div>
 
-            {/* HERO DESCRIPTION */}
-            <p className="mt-5 max-w-lg text-sm leading-7 text-slate-400 md:text-base">
-              {copy.text}
-            </p>
+                <h1 className="mt-6 max-w-xl text-4xl font-black leading-[1.05] tracking-tight md:text-6xl">
+                  {guestCopy.title}
+
+                  <span className="block bg-gradient-to-r from-cyan-300 via-sky-300 to-violet-300 bg-clip-text text-transparent">
+                    {guestCopy.accent}
+                  </span>
+                </h1>
+
+                <p className="mt-5 max-w-lg text-sm leading-7 text-slate-400 md:text-base">
+                  {guestCopy.text}
+                </p>
+              </>
+            )}
 
             {/* MINI FEATURES */}
             <div className="mt-8 grid max-w-lg grid-cols-3 gap-3">
@@ -125,7 +225,7 @@ export function StorefrontHome() {
               />
             </div>
 
-            {/* BUTTON */}
+            {/* BUTTON PILIH PRODUK */}
             <a
               href="#order"
               className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-white hover:text-cyan-200"
@@ -150,7 +250,7 @@ export function StorefrontHome() {
         </div>
       </section>
 
-      {/* CONTENT BERUBAH SESUAI TAB */}
+      {/* BAGIAN BAWAH TETAP SAMA */}
       <InfoSection category={activeCategory} />
 
       <StatsSection category={activeCategory} />
