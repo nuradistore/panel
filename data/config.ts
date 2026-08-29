@@ -29,7 +29,7 @@ export const appConfig = {
       user: "brockstore71@gmail.com", // Gmail buat ngirim ke Gmail buyer 
       pass: process.env.GMAIL_PASSWORD, // sandi aplikasi 
     },
-    from: "BROCK STORE <brockstore71@gmail.com>",
+    from: "TIM BROCK STORE <brockstore71@gmail.com>",
   }, // ganti sendiri 
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN || "",
