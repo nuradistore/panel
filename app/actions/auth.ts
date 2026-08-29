@@ -52,7 +52,7 @@ export async function loginAction(formData: FormData) {
     maxAge: 60 * 60 * 24 * 30,
   })
 
-  redirect("/store")
+  redirect("/account")
 }
 
 export async function logoutAction() {
