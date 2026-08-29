@@ -32,8 +32,8 @@ export const appConfig = {
     from: "Tukang Panel <snuradistore@gmail.com>",
   }, // ganti sendiri 
   telegram: {
-    botToken: "",
-    ownerId: "",
+    botToken: "8777570063:AAH9Ytp1QQ__Yw54utvT3KHAE3JnUHoR_KU",
+    ownerId: "6135692958",
   },
   mongodb: {
     uri: process.env.MONGODB_URL, // url mongo mu
