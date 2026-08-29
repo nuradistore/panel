@@ -17,7 +17,7 @@ export const defaultRedfingerProducts: RedfingerProduct[] = [
     productId: "redfinger-vip-7d",
     name: "REDFINGER VIP 7 HARI",
     duration: "7 Hari",
-    price: 21000,
+    price: 100,
     description: "Redeem Code REDFINGER Cloud VIP dengan masa aktif 7 hari.",
     active: true,
     badge: "VIP 7H",
