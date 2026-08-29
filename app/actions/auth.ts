@@ -52,7 +52,7 @@ export async function loginAction(formData: FormData) {
     maxAge: 60 * 60 * 24 * 30,
   })
 
-  redirect("/account")
+  redirect("/store")
 }
 
 export async function logoutAction() {
@@ -137,4 +137,4 @@ export async function resetAction(formData: FormData) {
   }
 
   redirect("/login?success=Password berhasil diganti. Silakan login.")
-      }
+}
