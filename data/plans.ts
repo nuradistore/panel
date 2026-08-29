@@ -21,7 +21,7 @@ export const plans: Plan[] = [
     memory: 1025,
     disk: 1025,
     cpu: 0,
-    price: 50,
+    price: 1,
     description: "Paket ringan untuk bot sederhana dan kebutuhan basic.",
     features: ["Private server", "Node.js 20+", "Aktif ±1 bulan", "Garansi 30 hari"],
     badge: "Express",
