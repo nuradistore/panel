@@ -84,7 +84,7 @@ export class Pterodactyl {
       })
 
       throw new Error(
-        "Failed to retrieve user list from Pterodactyl panel"
+        "Konfigurasi panel Pterodactyl belum lengkap."
       )
     }
   }
@@ -96,6 +96,12 @@ export class Pterodactyl {
   ): Promise<T> {
     const url = `${this.domain}/api/application${endpoint}`
 
+    const controller = new AbortController()
+
+    const timeout = setTimeout(() => {
+      controller.abort()
+    }, 8000)
+
     const options: RequestInit = {
       method,
       headers: {
@@ -104,13 +110,12 @@ export class Pterodactyl {
         Authorization: `Bearer ${this.apiKey}`,
       },
       cache: "no-store",
+      signal: controller.signal,
     }
 
     if (body !== null) {
       options.body = JSON.stringify(body)
     }
-
-    let response: Response
 
     try {
       console.error("PTERODACTYL REQUEST:", {
@@ -119,76 +124,141 @@ export class Pterodactyl {
         apiKeyExists: Boolean(this.apiKey),
       })
 
-      response = await fetch(url, options)
-    } catch (error) {
-      console.error("PTERODACTYL FETCH FAILED:", {
-        url,
-        error:
-          error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-                cause: error.cause,
-                stack: error.stack,
-              }
-            : error,
-      })
+      const response = await fetch(url, options)
 
-      throw error
-    }
+      clearTimeout(timeout)
 
-    console.error("PTERODACTYL RESPONSE:", {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-    })
-
-    if (!response.ok) {
-      const raw = await response.text()
-
-      console.error("PTERODACTYL API ERROR:", {
+      console.error("PTERODACTYL RESPONSE:", {
         url,
         status: response.status,
         statusText: response.statusText,
-        response: raw,
       })
 
-      let errorMessage =
-        `API request failed with status ${response.status}: ${response.statusText}`
+      if (!response.ok) {
+        const raw = await response.text()
+
+        console.error("PTERODACTYL API ERROR:", {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          response: raw,
+        })
+
+        let errorMessage =
+          `Pterodactyl API error ${response.status}: ${response.statusText}`
+
+        try {
+          const errorData = JSON.parse(raw)
+
+          errorMessage =
+            errorData?.errors?.[0]?.detail ||
+            errorMessage
+        } catch {}
+
+        if (response.status === 401) {
+          throw new Error(
+            "API key Pterodactyl tidak valid atau sudah tidak aktif."
+          )
+        }
+
+        if (response.status === 403) {
+          throw new Error(
+            "API key Pterodactyl tidak memiliki izin untuk mengakses data ini."
+          )
+        }
+
+        if (response.status === 404) {
+          throw new Error(
+            "Endpoint Pterodactyl tidak ditemukan. Periksa domain panel."
+          )
+        }
+
+        if (response.status >= 500) {
+          throw new Error(
+            "Panel Pterodactyl sedang mengalami gangguan. Silakan coba lagi beberapa saat."
+          )
+        }
+
+        throw new Error(errorMessage)
+      }
+
+      if (response.status === 204) {
+        return {} as T
+      }
+
+      const text = await response.text()
+
+      if (!text) {
+        return {} as T
+      }
 
       try {
-        const errorData = JSON.parse(raw)
+        return JSON.parse(text) as T
+      } catch (error) {
+        console.error(
+          "PTERODACTYL JSON PARSE ERROR:",
+          {
+            url,
+            responseText: text,
+            error,
+          }
+        )
 
-        errorMessage =
-          errorData?.errors?.[0]?.detail ||
-          errorMessage
-      } catch {}
+        throw new Error(
+          "Response dari panel Pterodactyl tidak valid."
+        )
+      }
+    } catch (error: any) {
+      clearTimeout(timeout)
 
-      throw new Error(errorMessage)
-    }
+      if (error?.name === "AbortError") {
+        console.error("PTERODACTYL TIMEOUT:", {
+          url,
+          message:
+            "Request timeout after 8 seconds",
+        })
 
-    if (response.status === 204) {
-      return {} as T
-    }
+        throw new Error(
+          "Panel sedang tidak dapat dihubungi. Silakan coba lagi beberapa saat."
+        )
+      }
 
-    const text = await response.text()
+      if (
+        error instanceof TypeError &&
+        error.message.toLowerCase().includes("fetch")
+      ) {
+        console.error(
+          "PTERODACTYL NETWORK ERROR:",
+          {
+            url,
+            message: error.message,
+          }
+        )
 
-    if (!text) {
-      return {} as T
-    }
+        throw new Error(
+          "Panel sedang tidak dapat dihubungi. Silakan coba lagi beberapa saat."
+        )
+      }
 
-    try {
-      return JSON.parse(text) as T
-    } catch (error) {
-      console.error("PTERODACTYL JSON PARSE ERROR:", {
-        url,
-        responseText: text,
-        error,
-      })
-
-      throw new Error(
-        "Invalid JSON response from Pterodactyl panel"
+      console.error(
+        "PTERODACTYL FETCH FAILED:",
+        {
+          url,
+          error:
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  message: error.message,
+                  cause: error.cause,
+                  stack: error.stack,
+                }
+              : error,
+        }
       )
+
+      throw error
+    } finally {
+      clearTimeout(timeout)
     }
   }
 
@@ -198,14 +268,20 @@ export class Pterodactyl {
     password: string,
     rootAdmin = false
   ): Promise<UserResponse> {
-    return this.request<UserResponse>("/users", "POST", {
-      username,
-      email,
-      first_name: username,
-      last_name: rootAdmin ? "Admin" : "User",
-      password,
-      root_admin: rootAdmin,
-    })
+    return this.request<UserResponse>(
+      "/users",
+      "POST",
+      {
+        username,
+        email,
+        first_name: username,
+        last_name: rootAdmin
+          ? "Admin"
+          : "User",
+        password,
+        root_admin: rootAdmin,
+      }
+    )
   }
 
   async addServer(
@@ -215,12 +291,18 @@ export class Pterodactyl {
     disk: number,
     cpu: number
   ): Promise<ServerResponse> {
-    const eggData = await this.request<EggResponse>(
-      `/nests/${this.nests}/eggs/${this.egg}`
-    )
+    const eggData =
+      await this.request<EggResponse>(
+        `/nests/${this.nests}/eggs/${this.egg}`
+      )
 
-    if (!eggData.attributes || !eggData.attributes.startup) {
-      throw new Error("Egg startup command is undefined.")
+    if (
+      !eggData.attributes ||
+      !eggData.attributes.startup
+    ) {
+      throw new Error(
+        "Egg startup command is undefined."
+      )
     }
 
     const dockerImage =
@@ -230,7 +312,7 @@ export class Pterodactyl {
 
     if (!dockerImage) {
       throw new Error(
-        "NodeJS 20 docker image not available in this egg."
+        "NodeJS 20 docker image tidak tersedia pada egg."
       )
     }
 
@@ -239,12 +321,18 @@ export class Pterodactyl {
       "POST",
       {
         name: serverName,
+
         description:
           "Order Panel? Kunjungi https://www.tokopanelbrockstore.my.id",
+
         user: userId,
+
         egg: Number.parseInt(this.egg),
+
         docker_image: dockerImage,
-        startup: eggData.attributes.startup,
+
+        startup:
+          eggData.attributes.startup,
 
         environment: {
           GIT_ADDRESS: "",
@@ -274,8 +362,14 @@ export class Pterodactyl {
         },
 
         deploy: {
-          locations: [Number.parseInt(this.location)],
+          locations: [
+            Number.parseInt(
+              this.location
+            ),
+          ],
+
           dedicated_ip: false,
+
           port_range: [],
         },
       }
@@ -291,24 +385,34 @@ export class Pterodactyl {
   > {
     try {
       const serversResponse =
-        await this.request<ServerListResponse>("/servers")
+        await this.request<ServerListResponse>(
+          "/servers"
+        )
 
       if (!serversResponse.data) {
         return []
       }
 
-      return serversResponse.data.map((server) => ({
-        id: server.attributes.id,
-        name: server.attributes.name,
-        user: server.attributes.user,
-      }))
+      return serversResponse.data.map(
+        (server) => ({
+          id: server.attributes.id,
+          name: server.attributes.name,
+          user: server.attributes.user,
+        })
+      )
     } catch (error) {
       console.error(
         "PTERODACTYL LIST SERVERS REAL ERROR:",
         error
       )
 
-      throw error
+      if (error instanceof Error) {
+        throw error
+      }
+
+      throw new Error(
+        "Gagal mengambil daftar server dari panel Pterodactyl."
+      )
     }
   }
 
@@ -326,7 +430,9 @@ export class Pterodactyl {
       )
 
       const usersResponse =
-        await this.request<UserListResponse>("/users")
+        await this.request<UserListResponse>(
+          "/users"
+        )
 
       if (!usersResponse.data) {
         return []
@@ -335,24 +441,43 @@ export class Pterodactyl {
       console.error(
         "PTERODACTYL LIST USERS SUCCESS:",
         {
-          totalUsers: usersResponse.data.length,
+          totalUsers:
+            usersResponse.data.length,
         }
       )
 
-      return usersResponse.data.map((user) => ({
-        id: user.attributes.id,
-        username: user.attributes.username,
-        email: user.attributes.email,
-        root_admin: user.attributes.root_admin,
-      }))
+      return usersResponse.data.map(
+        (user) => ({
+          id: user.attributes.id,
+          username:
+            user.attributes.username,
+          email:
+            user.attributes.email,
+          root_admin:
+            user.attributes.root_admin,
+        })
+      )
     } catch (error) {
       console.error(
         "PTERODACTYL LIST USERS REAL ERROR:",
         error
       )
 
+      /*
+       * PENTING:
+       * Jangan timpa error di sini.
+       *
+       * Kalau request timeout, pesan:
+       * "Panel sedang tidak dapat dihubungi..."
+       * akan diteruskan ke check-user-exists.ts
+       * dan kemudian muncul ke user.
+       */
+      if (error instanceof Error) {
+        throw error
+      }
+
       throw new Error(
-        "Failed to retrieve user list from Pterodactyl panel"
+        "Gagal mengambil daftar user dari panel Pterodactyl."
       )
     }
   }
@@ -366,6 +491,7 @@ export class Pterodactyl {
         email: string
         root_admin?: boolean
         total_servers: number
+
         servers: Array<{
           id: number
           name: string
@@ -387,7 +513,8 @@ export class Pterodactyl {
       }
     }
 
-    const servers = await this.listServers()
+    const servers =
+      await this.listServers()
 
     const userServers =
       servers.filter(
@@ -396,11 +523,24 @@ export class Pterodactyl {
       )
 
     return {
-      id: userResponse.attributes.id,
-      username: userResponse.attributes.username,
-      email: userResponse.attributes.email,
-      root_admin: userResponse.attributes.root_admin,
-      total_servers: userServers.length,
+      id:
+        userResponse.attributes.id,
+
+      username:
+        userResponse.attributes
+          .username,
+
+      email:
+        userResponse.attributes
+          .email,
+
+      root_admin:
+        userResponse.attributes
+          .root_admin,
+
+      total_servers:
+        userServers.length,
+
       servers: userServers,
     }
   }
