@@ -1,0 +1,15 @@
+BROCK STORE - SESSION HEARTBEAT
+
+- heartbeatSeconds: 20
+- awaySessionMinutes: 5
+- Selama tab BROCK STORE terlihat, heartbeat memperbarui sessionLastSeenAt.
+- Saat pindah aplikasi / tutup Chrome, heartbeat berhenti.
+- Kembali sebelum 5 menit: tetap login.
+- Kembali setelah >= 5 menit: session dibatalkan dan diarahkan ke /login?reason=session_expired.
+- Logo Home, Navbar, Login/Daftar/Lupa Password/Reset, Verifikasi Email, dan favicon memakai satu sumber: appConfig.brand.logo.
+- Logo saat ini: /public/brock.png
+
+## Logo & ikon (update)
+- Logo tampilan web: appConfig.brand.logo = /brock-logo.png (versi 512px dari brock.png yang 1MB).
+- Ikon browser/riwayat/tab: favicon.ico, favicon-32.png, icon-192.png, icon-512.png, apple-touch-icon.png (semua di /public, dipetakan di appConfig.brand + app/layout.tsx).
+- Kalau ganti logo: timpa file-file di atas (ukuran persegi), cukup itu saja.
