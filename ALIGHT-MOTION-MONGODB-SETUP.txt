@@ -1,0 +1,54 @@
+BROCK STORE - SETUP STOK ALIGHT MOTION
+
+Sharing  = OTOMATIS  (bayar sukses -> 1 akun diambil dari stok -> tampil di invoice -> dikirim ke email pembeli)
+Private  = MANUAL    (bayar sukses -> 1 slot stok terpakai -> email berisi instruksi hubungi admin WA/Telegram
+                      + kirim SS email & ID transaksi -> admin kirim akun private secara manual)
+
+Kedua tipe: notif Telegram admin tetap terkirim.
+
+1) Collection: am_stock  (1 dokumen = 1 stok)
+
+AM Premium Sharing (akun langsung dikirim):
+{
+  "productId": "am-sharing-1y",
+  "email": "akunsharing@email.com",
+  "password": "password-akun",
+  "status": "available"
+}
+
+AM Premium Private (MANUAL, isi kontak admin, TIDAK perlu email/password):
+{
+  "productId": "am-private-1y",
+  "whatsapp": "083112108527",
+  "telegram": "@brockstoreid",
+  "status": "available"
+}
+- "whatsapp" & "telegram" boleh dihapus, nanti otomatis pakai default di data/config.ts -> contact.
+- Kunci lama "nomer wa" juga tetap terbaca.
+- Catatan: pastikan JSON valid (nomor WA harus dalam tanda kutip dua di awal dan akhir).
+
+Stok = jumlah dokumen berstatus "available". Kalau stok 0, produk tampil habis.
+Saat terjual, status otomatis jadi "sold" + transactionId, buyerEmail, soldAt.
+
+2) Collection: am_products (OPSIONAL)
+Hanya untuk override, mis. matikan produk:
+{ "productId": "am-private-1y", "active": false }
+
+3) Kalau pembayaran masuk tapi stok habis
+- Admin dapat alert Telegram.
+- Isi stok di am_stock, lalu pesanan diproses otomatis saat pembeli membuka/menunggu invoice,
+  atau buka manual: https://DOMAIN-KAMU/callback?merchant_ref=ID_TRANSAKSI
+
+4) Kalau email gagal terkirim
+Sistem mencoba kirim ulang otomatis saat invoice dibuka lagi / callback dipanggil lagi. Tidak akan terkirim dobel.
+
+5) Tombol di semua email pesanan (Panel, Admin Panel, Redfinger, AM Sharing, AM Private)
+- Ikuti Saluran Brock Store (WhatsApp)
+- All Transaksi (https://t.me/alltransakibrockstore)
+Ubah di data/config.ts -> emailChannels.
+
+6) Kontak admin (WA & Telegram) diubah di data/config.ts -> contact.
+
+Harga default di source:
+- AM Premium Sharing 1 Tahun: Rp3.000
+- AM Premium Private 1 Tahun: Rp7.000
